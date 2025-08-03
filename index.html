@@ -61,31 +61,31 @@
 </head>
 <body class="bg-gray-100 p-8">
     <div class="container mx-auto p-8 bg-white rounded-xl shadow-lg flex flex-col items-center">
-        <h1 class="text-4xl font-extrabold text-gray-900 mb-6 text-center">Text Comparison Tool</h1>
+        <h1 class="text-4xl font-extrabold text-gray-900 mb-6 text-center">Requirements Diff Tool</h1>
 
-        <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="w-full grid grid-cols-2 gap-6 mb-8">
             <div>
-                <label for="originalText" class="block text-lg font-medium text-gray-700 mb-2">Current requirement (copy from the site):</label>
+                <label for="originalText" class="block text-lg font-medium text-gray-700 mb-2">Current requirements (copy from the site):</label>
                 <textarea id="originalText"
                           class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out text-gray-800"
-                          placeholder="Paste the current requirement here..."></textarea>
+                          placeholder="Paste your original text here..."></textarea>
             </div>
             <div>
-                <label for="newText" class="block text-lg font-medium text-gray-700 mb-2">New or updated requirement (copy from the proposal):</label>
+                <label for="newText" class="block text-lg font-medium text-gray-700 mb-2">Preview requirements (copy from the proposal):</label>
                 <textarea id="newText"
                           class="w-full p-4 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out text-gray-800"
-                          placeholder="Paste the new or modified requirement here..."></textarea>
+                          placeholder="Paste the new or modified text here..."></textarea>
             </div>
         </div>
 
         <div class="flex flex-col sm:flex-row gap-4 mb-8">
             <button id="compareButton"
                     class="px-8 py-4 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition duration-300 ease-in-out transform hover:scale-105">
-                Compare requirements
+                Compare Texts
             </button>
             <button id="copyDiffButton"
                     class="px-8 py-4 bg-gray-600 text-white font-semibold rounded-lg shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition duration-300 ease-in-out transform hover:scale-105">
-                Copy diffs
+                Copy Diff
             </button>
         </div>
 
