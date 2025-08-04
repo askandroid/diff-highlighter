@@ -39,7 +39,7 @@
         /* Custom highlight styles */
         .text-strikethrough-default { /* Renamed class for clarity */
             text-decoration: line-through;
-            /* Ensure no background property here, relying on inline style for transparency */
+            background-color: #f0f0f0; /* Added light grey background for strikethrough */
         }
         .message-box {
             position: fixed;
@@ -246,7 +246,7 @@ Final paragraph of modified document. With a new sentence.`;
                         if (currentOriginalToken === '\n') {
                             htmlResult.unshift('<br>'); // Keep newlines as is, don't strike out
                         } else {
-                            htmlResult.unshift(`<span class="text-strikethrough-default" style="background-color: transparent;">${currentOriginalToken}</span>`);
+                            htmlResult.unshift(`<span class="text-strikethrough-default">${currentOriginalToken}</span>`); // Removed inline style
                         }
                         i--;
                     } else if (j > 0 && (i === 0 || dp[i][j - 1] > dp[i - 1][j])) {
