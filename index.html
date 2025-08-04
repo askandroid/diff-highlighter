@@ -182,142 +182,37 @@ Final paragraph of modified document. With a new sentence.`;
             }
 
             /**
-             * Generates HTML highlighting differences between two texts.
-             * It uses a hierarchical LCS: first comparing paragraphs, then lines within paragraphs,
-             * then (for matching ID lines) performing a granular word-level diff on the content after the ID.
+             * Generates HTML highlighting differences between two texts using a word-by-word diff.
+             * New content is highlighted in forest green, removed content is struck through.
              * @param {string} originalText
              * @param {string} newText
              * @returns {string} HTML string with highlighted differences.
              */
             function generateDiffHtml(originalText, newText) {
-                // Regex to capture the ID at the beginning of a line and the rest of the line.
-                const idLinePartsPattern = /^([A-Z]{3,}-\d{3,})(.*)$/i;
-
-                // Helper to aggressively clean strings for robust comparison
-                const cleanForComparison = (str) => {
-                    if (str === null || str === undefined) return '';
-                    if (typeof str !== 'string') return String(str);
-                    // Replace any sequence of whitespace characters (including non-breaking spaces, tabs, multiple spaces) with a single space
-                    // Then trim leading/trailing spaces.
-                    return str.replace(/\s+/g, ' ').trim();
+                // Tokenizer that splits text into words, punctuation, and individual whitespace characters (including newlines)
+                const tokenize = (text) => {
+                    // Regex to split by:
+                    // 1. Groups of word characters (\w+)
+                    // 2. Individual non-word, non-whitespace characters ([^\w\s]) - captures punctuation
+                    // 3. Individual whitespace characters (\s) - captures ' ', '\n', '\t'
+                    // Wrapping them in parentheses ensures `split` includes them in the result.
+                    return text.split(/(\w+|[^\w\s]|\s)/).filter(Boolean); // Filter(Boolean) removes empty strings
                 };
 
-                // --- Helper for granular word-level diffing of arbitrary text ---
-                const granularWordDiff = (originalSubText, newSubText) => {
-                    const wordSplitter = /(\w+|[^\w\s]|\s)/; // Includes punctuation and whitespace as tokens
-                    const subTokensOriginal = originalSubText.split(wordSplitter).filter(Boolean);
-                    const subTokensNew = newSubText.split(wordSplitter).filter(Boolean);
+                const originalTokens = tokenize(originalText);
+                const newTokens = tokenize(newText);
 
-                    const m = subTokensOriginal.length;
-                    const n = subTokensNew.length;
+                const m = originalTokens.length;
+                const n = newTokens.length;
 
-                    const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-                    for (let i = 1; i <= m; i++) {
-                        for (let j = 1; j <= n; j++) {
-                            if (cleanForComparison(subTokensOriginal[i - 1]) === cleanForComparison(subTokensNew[j - 1])) {
-                                dp[i][j] = dp[i - 1][j - 1] + 1;
-                            } else {
-                                dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-                            }
-                        }
-                    }
-
-                    let subResult = [];
-                    let i = m;
-                    let j = n;
-
-                    while (i > 0 || j > 0) {
-                        const originalSubToken = i > 0 ? subTokensOriginal[i - 1] : null;
-                        const newSubToken = j > 0 ? subTokensNew[j - 1] : null;
-
-                        const tokensMatch = (originalSubToken && newSubToken && cleanForComparison(originalSubToken) === cleanForComparison(newSubToken));
-
-                        if (tokensMatch) {
-                            subResult.unshift(originalSubToken); // Use original for display
-                            i--;
-                            j--;
-                        } else if (originalSubToken && (j === 0 || dp[i - 1][j] >= dp[i][j - 1])) {
-                            subResult.unshift(`<span class="text-strikethrough-default" style="background-color: transparent;">${originalSubToken}</span>`);
-                            i--;
-                        } else if (newSubToken && (i === 0 || dp[i][j - 1] > dp[i - 1][j])) {
-                            subResult.unshift(`<span style="background-color: #d9ead3; padding: 0 2px; border-radius: 0.25rem;">${newSubToken}</span>`);
-                            j--;
-                        }
-                    }
-                    return subResult.join('');
-                };
-
-                // --- Main Tokenization: Paragraphs and Newline Blocks ---
-                const tokenizeBlocks = (text) => {
-                    // Split by blocks separated by two or more newlines, capturing the newline blocks themselves.
-                    const rawBlocks = text.split(/(\n{2,})/).filter(Boolean);
-                    const blockObjects = [];
-
-                    rawBlocks.forEach(rawBlock => {
-                        if (rawBlock.startsWith('\n')) { // This is a newline block (e.g., "\n\n")
-                            blockObjects.push({ type: 'newline_block', value: rawBlock, original: rawBlock });
-                        } else { // This is actual content for a paragraph
-                            // Within each paragraph, split into individual lines to identify IDs or normal lines
-                            const linesInBlock = rawBlock.split(/(\n)/).filter(Boolean);
-                            const contentSubTokens = []; // These are the internal tokens of this paragraph
-
-                            linesInBlock.forEach(line => {
-                                const idMatch = line.match(idLinePartsPattern);
-                                if (idMatch) {
-                                    contentSubTokens.push({
-                                        type: 'id_line',
-                                        idValue: cleanForComparison(idMatch[1]), // Cleaned ID for comparison
-                                        idOriginal: idMatch[1], // Original ID for display
-                                        contentValue: cleanForComparison(idMatch[2]), // Cleaned content for comparison
-                                        contentOriginal: idMatch[2], // Original content for display
-                                        original: line // Full original line for fallback display
-                                    });
-                                } else if (line === '\n') {
-                                     contentSubTokens.push({ type: 'newline', value: '\n', original: '\n' });
-                                } else {
-                                    contentSubTokens.push({
-                                        type: 'normal_line',
-                                        value: cleanForComparison(line),
-                                        original: line
-                                    });
-                                }
-                            });
-                            blockObjects.push({
-                                type: 'paragraph',
-                                value: cleanForComparison(rawBlock), // Cleaned entire paragraph for comparison
-                                original: rawBlock, // Original entire paragraph for fallback display
-                                subTokens: contentSubTokens // Structured internal content
-                            });
-                        }
-                    });
-                    return blockObjects;
-                };
-
-                const originalBlocks = tokenizeBlocks(originalText);
-                const newBlocks = tokenizeBlocks(newText);
-
-                const m = originalBlocks.length;
-                const n = newBlocks.length;
-
-                // --- Initialize DP table for primary block-level LCS comparison ---
+                // Create a 2D array for dynamic programming table (LCS lengths)
                 const dp = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
 
+                // Fill the dp table
                 for (let i = 1; i <= m; i++) {
                     for (let j = 1; j <= n; j++) {
-                        const originalBlock = originalBlocks[i - 1];
-                        const newBlock = newBlocks[j - 1];
-
-                        let match = false;
-                        if (originalBlock.type === newBlock.type) {
-                            if (originalBlock.type === 'newline_block') {
-                                match = true; // Newline blocks always match if both are newline blocks
-                            } else if (originalBlock.type === 'paragraph') {
-                                // Paragraphs match if their cleaned content is identical at this top level.
-                                match = originalBlock.value === newBlock.value;
-                            }
-                        }
-                        if (match) {
+                        // Compare tokens directly. Trim for comparison to handle minor whitespace differences.
+                        if (originalTokens[i - 1].trim() === newTokens[j - 1].trim()) {
                             dp[i][j] = dp[i - 1][j - 1] + 1;
                         } else {
                             dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
@@ -325,152 +220,49 @@ Final paragraph of modified document. With a new sentence.`;
                     }
                 }
 
-                // --- Reconstruct the diff HTML ---
+                // Reconstruct the diff by backtracking through the dp table
                 let htmlResult = [];
                 let i = m;
                 let j = n;
 
                 while (i > 0 || j > 0) {
-                    const originalBlock = i > 0 ? originalBlocks[i - 1] : null;
-                    const newBlock = j > 0 ? newBlocks[j - 1] : null;
+                    const currentOriginalToken = i > 0 ? originalTokens[i - 1] : null;
+                    const currentNewToken = j > 0 ? newTokens[j - 1] : null;
 
-                    let match = false;
-                    if (originalBlock && newBlock && originalBlock.type === newBlock.type) {
-                        if (originalBlock.type === 'newline_block') {
-                            match = true;
-                        } else if (originalBlock.type === 'paragraph') {
-                            match = originalBlock.value === newBlock.value;
-                        }
-                    }
+                    // Compare trimmed versions for matching
+                    const tokensMatch = (currentOriginalToken && currentNewToken && currentOriginalToken.trim() === currentNewToken.trim());
 
-                    if (originalBlock && newBlock && match && dp[i][j] === (dp[i-1][j-1] + 1)) {
-                        // Common block based on primary LCS
-                        if (originalBlock.type === 'newline_block') {
-                            htmlResult.unshift(originalBlock.original.replace(/\n/g, '<br>')); // Convert block of newlines to <br> tags
-                        } else if (originalBlock.type === 'paragraph') {
-                            // This paragraph matched at the top level. Now, do a deeper diff on its internal lines.
-                            let paragraphContentHtml = [];
-                            
-                            // --- Secondary LCS on internal lines of matching paragraphs ---
-                            const subOriginals = originalBlock.subTokens;
-                            const subNews = newBlock.subTokens;
-
-                            const sub_m = subOriginals.length;
-                            const sub_n = subNews.length;
-
-                            const sub_dp = Array(sub_m + 1).fill(null).map(() => Array(sub_n + 1).fill(0));
-
-                            for (let si = 1; si <= sub_m; si++) {
-                                for (let sj = 1; sj <= sub_n; sj++) {
-                                    const subOrigToken = subOriginals[si - 1];
-                                    const subNewToken = subNews[sj - 1];
-                                    let subMatch = false;
-
-                                    if (subOrigToken.type === subNewToken.type) {
-                                        if (subOrigToken.type === 'newline') {
-                                            subMatch = true;
-                                        } else if (subOrigToken.type === 'id_line') {
-                                            // Match ID lines if only the ID part is identical (for this sub-LCS)
-                                            subMatch = subOrigToken.idValue === subNewToken.idValue;
-                                        } else if (subOrigToken.type === 'normal_line') {
-                                            subMatch = subOrigToken.value === subNewToken.value; // Full line match for normal lines
-                                        }
-                                    }
-                                    if (subMatch) {
-                                        sub_dp[si][sj] = sub_dp[si - 1][sj - 1] + 1;
-                                    } else {
-                                        sub_dp[si][sj] = Math.max(sub_dp[si - 1][sj], sub_dp[si][sj - 1]);
-                                    }
-                                }
-                            }
-
-                            let sub_i = sub_m;
-                            let sub_j = sub_n;
-
-                            while (sub_i > 0 || sub_j > 0) {
-                                const subOrigToken = sub_i > 0 ? subOriginals[sub_i - 1] : null;
-                                const subNewToken = sub_j > 0 ? subNews[sub_j - 1] : null;
-
-                                let currentSubMatch = false;
-                                if (subOrigToken && subNewToken && subOrigToken.type === subNewToken.type) {
-                                     if (subOrigToken.type === 'newline') {
-                                        currentSubMatch = true;
-                                    } else if (subOrigToken.type === 'id_line') {
-                                        currentSubMatch = subOrigToken.idValue === subNewToken.idValue;
-                                    } else if (subOrigToken.type === 'normal_line') {
-                                        currentSubMatch = subOrigToken.value === subNewToken.value;
-                                    }
-                                }
-
-                                if (subOrigToken && subNewToken && currentSubMatch && sub_dp[sub_i][sub_j] === (sub_dp[sub_i - 1][sub_j - 1] + 1)) {
-                                    // Inner common token
-                                    if (subOrigToken.type === 'newline') {
-                                        paragraphContentHtml.unshift('<br>');
-                                    } else if (subOrigToken.type === 'id_line') {
-                                        // If IDs match, check if content part changed. If so, granular diff content.
-                                        if (subOrigToken.contentValue !== subNewToken.contentValue) {
-                                            const contentDiffHtml = granularWordDiff(subOrigToken.contentOriginal, subNewToken.contentOriginal);
-                                            paragraphContentHtml.unshift(`${subOrigToken.idOriginal}${contentDiffHtml}`);
-                                        } else {
-                                            // ID and content after ID are truly identical, output original line as-is
-                                            paragraphContentHtml.unshift(subOrigToken.original);
-                                        }
-                                    } else if (subOrigToken.type === 'normal_line') {
-                                        // For normal lines that match at this sub-level, perform word-level diff
-                                        if (subOrigToken.value !== subNewToken.value) { // Only do granular if content differs
-                                            const fullLineDiffHtml = granularWordDiff(subOrigToken.original, subNewToken.original);
-                                            paragraphContentHtml.unshift(fullLineDiffHtml);
-                                        } else {
-                                            // Normal line is truly identical
-                                            paragraphContentHtml.unshift(subOrigToken.original);
-                                        }
-                                    }
-                                    sub_i--;
-                                    sub_j--;
-                                } else if (subOrigToken && (sub_j === 0 || sub_dp[sub_i - 1][sub_j] >= sub_dp[sub_i][sub_j - 1])) {
-                                    // Inner removed token (line within paragraph)
-                                    if (subOrigToken.original === '\n') {
-                                        paragraphContentHtml.unshift('<br>'); // Newlines are structural, not removed content
-                                    } else {
-                                         paragraphContentHtml.unshift(`<span class="text-strikethrough-default" style="background-color: transparent;">${subOrigToken.original}</span>`);
-                                    }
-                                    sub_i--;
-                                } else if (subNewToken && (sub_i === 0 || sub_dp[sub_i][sub_j - 1] > sub_dp[sub_i - 1][sub_j])) {
-                                    // Inner added token (line within paragraph)
-                                    if (subNewToken.original === '\n') {
-                                        paragraphContentHtml.unshift('<br>'); // Newlines are structural, not added content
-                                    } else {
-                                        paragraphContentHtml.unshift(`<span style="background-color: #d9ead3; padding: 0 2px; border-radius: 0.25rem;">${subNewToken.original}</span>`);
-                                    }
-                                    sub_j--;
-                                }
-                            }
-                            htmlResult.unshift(`<p>${paragraphContentHtml.join('')}</p>`);
+                    if (tokensMatch) {
+                        // Common token: add as is (use original string for display)
+                        if (currentOriginalToken === '\n') {
+                            htmlResult.unshift('<br>');
+                        } else {
+                            htmlResult.unshift(currentOriginalToken);
                         }
                         i--;
                         j--;
-                    } else if (originalBlock && (j === 0 || dp[i - 1][j] >= dp[i][j - 1])) {
-                        // Entire paragraph/block removed (not matched by primary LCS)
-                        if (originalBlock.type === 'newline_block') {
-                            htmlResult.unshift(originalBlock.original.replace(/\n/g, '<br>'));
+                    } else if (i > 0 && (j === 0 || dp[i - 1][j] >= dp[i][j - 1])) {
+                        // Token removed from originalText (deletion)
+                        if (currentOriginalToken === '\n') {
+                            htmlResult.unshift('<br>'); // Keep newlines as is, don't strike out
                         } else {
-                            htmlResult.unshift(`<p><span class="text-strikethrough-default" style="background-color: transparent;">${originalBlock.original}</span></p>`);
+                            htmlResult.unshift(`<span class="text-strikethrough-default" style="background-color: transparent;">${currentOriginalToken}</span>`);
                         }
                         i--;
-                    } else if (newBlock && (i === 0 || dp[i][j - 1] > dp[i - 1][j])) {
-                        // Entire paragraph/block added (not matched by primary LCS)
-                        if (newBlock.type === 'newline_block') {
-                            htmlResult.unshift(newBlock.original.replace(/\n/g, '<br>'));
+                    } else if (j > 0 && (i === 0 || dp[i][j - 1] > dp[i - 1][j])) {
+                        // Token added in newText (insertion)
+                        if (currentNewToken === '\n') {
+                            htmlResult.unshift('<br>'); // Keep newlines as is, don't highlight
                         } else {
-                            htmlResult.unshift(`<p><span style="background-color: #d9ead3; padding: 0 2px; border-radius: 0.25rem;">${newBlock.original}</span></p>`);
+                             htmlResult.unshift(`<span style="background-color: #d9ead3; padding: 0 2px; border-radius: 0.25rem;">${currentNewToken}</span>`);
                         }
                         j--;
                     }
                 }
+
                 return htmlResult.join('');
             }
         });
     </script>
 </body>
 </html>
-```
